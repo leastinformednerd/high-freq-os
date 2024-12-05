@@ -1,5 +1,6 @@
 use std::env::args;
 use std::process::Command;
+use std::os::unix::process::CommandExt;
 use std::sync::Mutex;
 
 static DEFERRED: Mutex<Vec<&str>> = Mutex::new(vec![]);
@@ -39,7 +40,7 @@ fn build() -> bool {
     }
 
     match Command::new("sudo")
-        .args(["losetup", "/dev/loop0", "kern/disk.img"])
+        .args(["losetup", "-P", "/dev/loop0", "kern/disk.img"])
         .status()
         .expect("failed a call to losetup")
         .code() {
@@ -73,7 +74,7 @@ fn build() -> bool {
     }
 
     match Command::new("sudo")
-        .args(["mount","/dev/loop0", "./temporary_mount"])
+        .args(["mount","/dev/loop0p1", "./temporary_mount"])
         .status()
         .expect("failed a call to mount")
         .code() {
@@ -105,7 +106,7 @@ fn build() -> bool {
 }
 
 fn deferred_build() -> bool {
-    if !build() { return false };
+    let res = build();
     let mut defer_list = DEFERRED.lock().expect("Failed to defer");
     defer_list.reverse();
 
@@ -132,7 +133,7 @@ fn deferred_build() -> bool {
         }
     }
 
-    true
+    res
 }
 
 fn test() {
@@ -143,15 +144,20 @@ fn test() {
 
     Command::new("qemu-system-x86_64")
         .args(["-s", "-S", "-display", "gtk,zoom-to-fit=on",
-            "--bios", "/usr/share/OVMF/x64/OVMF.4m.fd", "-drive",
+            "--bios", "/nix/store/y0c428fwc7z8bp5m36c3d00qcn3qyx8g-OVMF-202402-fd/FV/OVMF.fd", "-drive",
             "file=kern/disk.img,format=raw,index=0,media=disk"])
         .spawn()
         .expect("Failed to open qemu");
 
+    Command::new("gdb")
+        .args(["-ex", "target remote localhost:1234", "target/os-dev-target/debug/kern"])
+        .exec();
+    /*
     Command::new("alacritty")
-        .args(["-e", "gdb", "target/os-dev-target/debug/kern"])
+        .args(["-e", "bash", "--rcfile",
+            "<(echo \". ~/bashrc; gdb -ex 'target remote localhost:1234' target/os-dev-target/debug/kern\")"])
         .spawn()
-        .expect("Failed to open terminal window with gdb");
+        .expect("Failed to open terminal window with gdb"); */
 }
 
 fn main() {
