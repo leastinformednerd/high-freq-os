@@ -149,15 +149,14 @@ fn test() {
         .spawn()
         .expect("Failed to open qemu");
 
-    Command::new("gdb")
+    /*Command::new("gdb")
         .args(["-ex", "target remote localhost:1234", "target/os-dev-target/debug/kern"])
-        .exec();
-    /*
+        .exec();*/
+    
     Command::new("alacritty")
-        .args(["-e", "bash", "--rcfile",
-            "<(echo \". ~/bashrc; gdb -ex 'target remote localhost:1234' target/os-dev-target/debug/kern\")"])
+        .args(["-e", "./gdb-target", "target/os-dev-target/debug/kern"])
         .spawn()
-        .expect("Failed to open terminal window with gdb"); */
+        .expect("Failed to open terminal window with gdb");
 }
 
 fn main() {
