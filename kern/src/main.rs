@@ -1,9 +1,17 @@
 #![no_std]
 #![no_main]
+#![feature(ascii_char)]
+#![feature(ascii_char_variants)]
+#![feature(generic_const_exprs)]
+#![feature(str_from_raw_parts)]
 
 mod debug_graphics;
 
-use debug_graphics::Colour;
+use debug_graphics::{DebugGraphicsState, TextBuffer};
+
+use spin::{Lazy, Mutex};
+
+use core::fmt::Write;
 
 #[used]
 #[link_section = ".requests"]
@@ -11,45 +19,59 @@ static BASE_REVISION: limine::BaseRevision = limine::BaseRevision::new();
 
 #[used]
 #[link_section = ".requests"]
-static FRAMEBUFFER_REQUEST: limine::request::FramebufferRequest = limine::request::FramebufferRequest::new();
+static FRAMEBUFFER_REQUEST: limine::request::FramebufferRequest =
+    limine::request::FramebufferRequest::new();
 
 #[panic_handler]
 fn panic(_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+fn print(text: &str, state: &mut debug_graphics::DebugGraphicsState) {
+    let mut lock = TEXT_BUFFER.lock();
+
+    lock.write_str(unsafe {
+        core::slice::from_raw_parts(text.as_ptr() as *const core::ascii::Char, text.len())
+    });
+
+    lock.print(state);
+}
+
+macro_rules! debug_write {
+    ($($arg:tt)*) => {
+        TEXT_BUFFER.lock().write_fmt(format_args!($($arg)*))
+    };
+}
+
+macro_rules! debug_print {
+    ($graphics_state:expr, $($arg:tt)*) => {
+        let mut lock = TEXT_BUFFER.lock();
+        lock.write_fmt(format_args!($($arg)*));
+        lock.print($graphics_state);
+        core::mem::drop(lock);
+    };
+}
+
+// Size of the text buffer is chosen arbitrarily
+static TEXT_BUFFER: Lazy<Mutex<TextBuffer<1500>>> =
+    Lazy::new(|| spin::Mutex::new(TextBuffer::new()));
+
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     assert!(BASE_REVISION.is_supported());
 
     let mut graphics_state = debug_graphics::DebugGraphicsState::new(
-        FRAMEBUFFER_REQUEST.get_response().unwrap().framebuffers().next().unwrap()
+        FRAMEBUFFER_REQUEST
+            .get_response()
+            .unwrap()
+            .framebuffers()
+            .next()
+            .unwrap(),
     );
 
-    graphics_state.framebuffer_as_pixel_slice()[100] = 0xffff0000;
+    for (index, val) in core::iter::repeat("Hello").zip((0..100).rev()) {
+        debug_print!(&mut graphics_state, "{}, {}\n", val, index);
+    }
 
-    let style = embedded_graphics::mono_font::MonoTextStyle::new(
-        &embedded_graphics::mono_font::ascii::FONT_10X20,
-        <embedded_graphics::pixelcolor::Rgb888 as embedded_graphics::pixelcolor::WebColors>::CSS_WHITE
-    );
-
-    let text = embedded_graphics::text::Text::new(
-        "Hello world",
-        embedded_graphics::geometry::Point::new(500,500),
-        style
-    );
-
-    let rect = (0..800).zip(0..800).map(|(x, y)| embedded_graphics::Pixel(
-            embedded_graphics::geometry::Point{x, y}, 
-            <embedded_graphics::pixelcolor::Rgb888 as embedded_graphics::pixelcolor::WebColors>::CSS_WHITE
-        ));
-
-
-    use embedded_graphics::draw_target::DrawTarget;
-    use embedded_graphics::Drawable;
-    text.draw(&mut graphics_state);
-
-    for _ in 0..1u64<<32 {};
-
-    panic!();
+    loop {}
 }

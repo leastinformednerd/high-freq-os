@@ -7,3 +7,5 @@ edition = "2021"
 limine = "0.3.1"
 x86_64 = { version = "0.15.1", default-features = false, features = ["instructions"] }
 embedded-graphics = "0.8.1"
+itoa = { version = "1.0.14" }
+spin = { version = "0.9.8" }

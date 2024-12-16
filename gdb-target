@@ -1,2 +1,2 @@
 #! /usr/bin/env bash
-gdb -ex 'target remote localhost:1234' $1
+rust-gdb -ex 'target remote localhost:1234' $1
